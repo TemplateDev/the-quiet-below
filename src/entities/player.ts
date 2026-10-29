@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import Entity from "./entity";
 import Maze, { type GridPosition } from "../maze/maze";
+import { GAME_SETTINGS } from "../settings";
 
 type MovementKeys = {
     up: Phaser.Input.Keyboard.Key;
@@ -24,7 +25,13 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
 
         const start = maze.startPosition;
         const { x, y } = maze.cellCenter(start.row, start.column);
-        super(scene, maze, start.row, start.column, scene.add.circle(x, y, 12, 0x38bdf8));
+        super(
+            scene,
+            maze,
+            start.row,
+            start.column,
+            scene.add.circle(x, y, GAME_SETTINGS.player.radius, GAME_SETTINGS.player.color)
+        );
 
         this.cursors = keyboard.createCursorKeys();
         this.wasdKeys = {
@@ -71,7 +78,7 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
         }
         this.maze.unlockAdjacentLocks(this.position, this.keys);
         this.maze.updateVisibility(this.position);
-        this.nextMoveAt = time + 150;
+        this.nextMoveAt = time + GAME_SETTINGS.player.moveIntervalMs;
     }
 
     private readMovementInput(): GridPosition | null {

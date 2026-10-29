@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import Entity from "./entity";
 import Maze, { type GridPosition } from "../maze/maze";
 import Player from "./player";
+import { GAME_SETTINGS } from "../settings";
 
 export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
     private readonly player: Player;
@@ -18,7 +19,12 @@ export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
             maze,
             start.row,
             start.column,
-            scene.add.circle(x, y, maze.playerRadius * 0.8, 0xf97316)
+            scene.add.circle(
+                x,
+                y,
+                maze.playerRadius * GAME_SETTINGS.enemy.radiusScale,
+                GAME_SETTINGS.enemy.color
+            )
         );
         this.player = player;
     }
@@ -34,7 +40,8 @@ export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
         const hasLineOfSight = this.maze.hasLineOfSight(this.position, playerPosition);
         if (hasLineOfSight) {
             if (!this.playerSpotted) {
-                this.nextMoveAt = Math.max(time, this.nextMoveAt) + 300;
+                this.nextMoveAt = Math.max(time, this.nextMoveAt) +
+                    GAME_SETTINGS.enemy.spottedDelayMs;
                 this.playerSpotted = true;
             }
             this.lastKnownPlayerPosition = playerPosition;
@@ -63,21 +70,13 @@ export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
             ? this.maze.findPathToTarget(this.position, target)
             : this.maze.findPath(this.position, target);
         if (path === null) {
-            if (this.lastKnownPlayerPosition) {
-                this.lastKnownPlayerPosition = null;
-            } else {
-                this.wanderTarget = null;
-            }
+            this.clearUnreachableTarget();
             return;
         }
 
         const nextPosition = path?.[0];
         if (!nextPosition) {
-            if (this.lastKnownPlayerPosition) {
-                this.lastKnownPlayerPosition = null;
-            } else {
-                this.wanderTarget = null;
-            }
+            this.clearUnreachableTarget();
             return;
         }
 
@@ -85,7 +84,15 @@ export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
             nextPosition,
             (row, column) => this.maze.canEnemyOccupy(row, column)
         )) {
-            this.nextMoveAt = time + 300;
+            this.nextMoveAt = time + GAME_SETTINGS.enemy.moveIntervalMs;
+        }
+    }
+
+    private clearUnreachableTarget() {
+        if (this.lastKnownPlayerPosition) {
+            this.lastKnownPlayerPosition = null;
+        } else {
+            this.wanderTarget = null;
         }
     }
 
@@ -109,7 +116,7 @@ export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
         }
 
         const candidates = this.maze
-            .getMarkerPositions(".")
+            .getMarkerPositions(GAME_SETTINGS.maze.symbols.floor)
             .filter(position => !this.samePosition(this.position, position))
             .filter(position => this.maze.findPath(this.position, position) !== null);
         this.wanderTarget = Phaser.Utils.Array.GetRandom(candidates) ?? null;

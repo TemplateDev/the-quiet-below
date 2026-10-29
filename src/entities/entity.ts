@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import Maze, { type GridPosition } from "../maze/maze";
+import { GAME_SETTINGS } from "../settings";
 
 export default abstract class Entity<T extends Phaser.GameObjects.GameObject & {
     x: number;
@@ -57,7 +58,7 @@ export default abstract class Entity<T extends Phaser.GameObjects.GameObject & {
             targets: this.gameObject,
             x,
             y,
-            duration: 100,
+            duration: GAME_SETTINGS.entity.moveAnimationMs,
             ease: "Sine.easeInOut"
         });
         return true;
