@@ -12,6 +12,7 @@ type MovementKeys = {
 export default class Player extends Entity<Phaser.GameObjects.Arc> {
     private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys;
     private readonly wasdKeys: MovementKeys;
+    private readonly keys = new Set<string>();
     private bufferedMove: GridPosition | null = null;
     private nextMoveAt = 0;
 
@@ -23,13 +24,7 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
 
         const start = maze.startPosition;
         const { x, y } = maze.cellCenter(start.row, start.column);
-        super(
-            scene,
-            maze,
-            start.row,
-            start.column,
-            scene.add.circle(x, y, maze.playerRadius, 0x38bdf8)
-        );
+        super(scene, maze, start.row, start.column, scene.add.circle(x, y, 12, 0x38bdf8));
 
         this.cursors = keyboard.createCursorKeys();
         this.wasdKeys = {
@@ -42,6 +37,8 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
     }
 
     update(time: number) {
+        this.maze.unlockAdjacentLocks(this.position, this.keys);
+
         const move = this.readMovementInput();
         if (move) {
             this.bufferedMove = move;
@@ -57,14 +54,22 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
             return;
         }
 
-        const moved = this.moveTo({
-            row: this.row + bufferedMove.row,
-            column: this.column + bufferedMove.column
-        });
+        const moved = this.moveTo(
+            {
+                row: this.row + bufferedMove.row,
+                column: this.column + bufferedMove.column
+            },
+            (row, column) => this.maze.canPlayerOccupy(row, column)
+        );
         if (!moved) {
             return;
         }
 
+        const key = this.maze.collectKeyAt(this.position);
+        if (key) {
+            this.keys.add(key);
+        }
+        this.maze.unlockAdjacentLocks(this.position, this.keys);
         this.maze.updateVisibility(this.position);
         this.nextMoveAt = time + 150;
     }
