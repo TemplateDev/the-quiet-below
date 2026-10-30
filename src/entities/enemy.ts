@@ -5,14 +5,25 @@ import Player from "./player";
 import { GAME_SETTINGS } from "../settings";
 
 export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
+    private readonly startPosition: GridPosition;
     private readonly player: Player;
+    private readonly onSpotted: () => void;
+    private readonly onStep: (position: GridPosition) => void;
     private allies: Enemy[] = [];
     private lastKnownPlayerPosition: GridPosition | null = null;
     private wanderTarget: GridPosition | null = null;
     private nextMoveAt = 0;
     private playerSpotted = false;
+    private hasSightOfPlayer = false;
 
-    constructor(scene: Phaser.Scene, maze: Maze, start: GridPosition, player: Player) {
+    constructor(
+        scene: Phaser.Scene,
+        maze: Maze,
+        start: GridPosition,
+        player: Player,
+        onSpotted: () => void,
+        onStep: (position: GridPosition) => void
+    ) {
         const { x, y } = maze.cellCenter(start.row, start.column);
         super(
             scene,
@@ -27,22 +38,41 @@ export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
             )
         );
         this.player = player;
+        this.startPosition = { ...start };
+        this.onSpotted = onSpotted;
+        this.onStep = onStep;
     }
 
     setAllies(allies: Enemy[]) {
         this.allies = allies.filter(enemy => enemy !== this);
     }
 
+    canSeePlayer(): boolean {
+        return this.hasSightOfPlayer;
+    }
+
+    reset() {
+        this.resetPosition(this.startPosition);
+        this.setVisible(this.maze.isVisible(this.startPosition));
+        this.lastKnownPlayerPosition = null;
+        this.wanderTarget = null;
+        this.nextMoveAt = 0;
+        this.playerSpotted = false;
+        this.hasSightOfPlayer = false;
+    }
+
     update(time: number) {
         this.setVisible(this.maze.isVisible(this.position));
 
         const playerPosition = this.player.position;
-        const hasLineOfSight = this.maze.hasLineOfSight(this.position, playerPosition);
+        this.hasSightOfPlayer = this.maze.hasLineOfSight(this.position, playerPosition);
+        const hasLineOfSight = this.hasSightOfPlayer;
         if (hasLineOfSight) {
             if (!this.playerSpotted) {
                 this.nextMoveAt = Math.max(time, this.nextMoveAt) +
                     GAME_SETTINGS.enemy.spottedDelayMs;
                 this.playerSpotted = true;
+                this.onSpotted();
             }
             this.lastKnownPlayerPosition = playerPosition;
             this.wanderTarget = null;
@@ -85,6 +115,7 @@ export default class Enemy extends Entity<Phaser.GameObjects.Arc> {
             (row, column) => this.maze.canEnemyOccupy(row, column)
         )) {
             this.nextMoveAt = time + GAME_SETTINGS.enemy.moveIntervalMs;
+            this.onStep(this.position);
         }
     }
 

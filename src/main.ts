@@ -12,3 +12,9 @@ const config = {
 }
 
 new Phaser.Game(config);
+
+let canvas = document.querySelector("canvas");
+if (canvas) {
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.style.cursor = "none";
+}

@@ -43,6 +43,16 @@ export default abstract class Entity<T extends Phaser.GameObjects.GameObject & {
         this.gameObject.setVisible(visible);
     }
 
+    protected resetPosition(position: GridPosition) {
+        this.scene.tweens.killTweensOf(this.gameObject);
+        this.row = position.row;
+        this.column = position.column;
+        const { x, y } = this.maze.cellCenter(this.row, this.column);
+        this.gameObject.x = x;
+        this.gameObject.y = y;
+        this.gameObject.setVisible(true);
+    }
+
     protected moveTo(
         position: GridPosition,
         canOccupy: (row: number, column: number) => boolean

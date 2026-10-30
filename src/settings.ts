@@ -4,7 +4,7 @@ export const GAME_SETTINGS = {
         height: window.innerHeight
     },
     levelIndex: 1,
-    backgroundColor: "#0f172a",
+    backgroundColor: "#000000",
     maze: {
         symbols: {
             wall: "#",
@@ -16,12 +16,12 @@ export const GAME_SETTINGS = {
         },
         maxTileSize: 96,
         tileGap: 2,
-        visibilityRayLength: 6,
-        wallColor: 0x334155,
-        floorColor: 0xe2e8f0,
+        visibilityRayLength: 12,
+        wallColor: 0x111111,
+        floorColor: 0x222222,
         startColor: 0x22c55e,
         exitColor: 0xef4444,
-        veilColor: 0x38bdf8,
+        veilColor: 0x888888,
         veilAlpha: 0.45,
         openedLockColor: 0x64748b,
         openedLockAlpha: 0.35,
@@ -36,27 +36,71 @@ export const GAME_SETTINGS = {
             "3": 0x9333ea
         }
     },
+    rendering: {
+        visibilityFadeMs: 180,
+        minimumBrightness: 0.18,
+        darknessDistance: 6,
+        particleCount: 24,
+        particleColor: 0xffffff,
+        particleMinAlpha: 0.05,
+        particleMaxAlpha: 0.1,
+        particleRadius: 1.6,
+        particleVisibilityIntervalMs: 100,
+        particleDriftDistance: 200,
+        particleMinDriftDurationMs: 3000,
+        particleMaxDriftDurationMs: 6000
+    },
     player: {
-        color: 0x38bdf8,
+        color: 0x666668,
         radius: 12,
         moveIntervalMs: 150
     },
     enemy: {
-        color: 0xf97316,
-        radiusScale: 0.8,
-        moveIntervalMs: 300,
-        spottedDelayMs: 300
+        color: 0x771111,
+        radiusScale: 0.5,
+        moveIntervalMs: 150,
+        spottedDelayMs: 700
     },
     entity: {
         moveAnimationMs: 100
     },
     camera: {
-        zoom: 0.85,
-        playerBias: 0.4,
-        smoothingMs: 480
+        zoom: 1.3,
+        enemySightZoom: 1.6,
+        zoomTransitionMs: 450,
+        zoomEase: "Sine.easeInOut",
+        playerBias: 1,
+        enemyInfluenceWeight: 0.5,
+        smoothingMs: 280
     },
-    collision: {
-        restartDelayMs: 500
+    effects: {
+        enemySightVignetteAlpha: 1.0,
+        vignetteTransitionMs: 200,
+        vignetteEase: "Sine.easeInOut",
+        sightStaticAlpha: 0.12,
+        staticHoldMs: 1000,
+        staticFadeOutMs: 500,
+        staticRefreshMs: 60,
+        hitStaticAlpha: 1
+    },
+    audio: {
+        ambienceKey: "ambience",
+        ambienceVolume: 1,
+        stepKey: "step",
+        stepVolume: 1,
+        stingerKey: "stinger",
+        stingerVolume: 0.7,
+        stingerCooldownMs: 1500,
+        spawnKey: "spawn",
+        spawnVolume: 1,
+        bleepKey: "bleep",
+        bleepVolume: 1,
+        hitKey: "hit",
+        hitVolume: 1,
+        failKey: "fail",
+        failVolume: 0.5,
+        enemyStepRadiusCells: 4,
+        enemyStepVolume: 3
     }
 } as const;
 

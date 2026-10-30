@@ -14,10 +14,11 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
     private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys;
     private readonly wasdKeys: MovementKeys;
     private readonly keys = new Set<string>();
+    private readonly onStep: () => void;
     private bufferedMove: GridPosition | null = null;
     private nextMoveAt = 0;
 
-    constructor(scene: Phaser.Scene, maze: Maze) {
+    constructor(scene: Phaser.Scene, maze: Maze, onStep: () => void) {
         const keyboard = scene.input.keyboard;
         if (!keyboard) {
             throw new Error("Keyboard input is unavailable.");
@@ -33,6 +34,7 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
             scene.add.circle(x, y, GAME_SETTINGS.player.radius, GAME_SETTINGS.player.color)
         );
 
+        this.onStep = onStep;
         this.cursors = keyboard.createCursorKeys();
         this.wasdKeys = {
             up: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -79,6 +81,15 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
         this.maze.unlockAdjacentLocks(this.position, this.keys);
         this.maze.updateVisibility(this.position);
         this.nextMoveAt = time + GAME_SETTINGS.player.moveIntervalMs;
+        this.onStep();
+    }
+
+    reset() {
+        this.keys.clear();
+        this.bufferedMove = null;
+        this.nextMoveAt = 0;
+        this.resetPosition(this.maze.startPosition);
+        this.maze.updateVisibility(this.position);
     }
 
     private readMovementInput(): GridPosition | null {

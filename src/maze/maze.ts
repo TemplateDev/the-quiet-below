@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME_SETTINGS, type KeySymbol, type LockSymbol } from "../settings";
+import MazeRenderer from "./maze-renderer";
 
 export interface GridPosition {
     row: number;
@@ -9,7 +10,7 @@ export interface GridPosition {
 export type LevelGrid = readonly (readonly string[])[];
 
 export default class Maze {
-    private readonly tiles: Phaser.GameObjects.Rectangle[][] = [];
+    private readonly renderer: MazeRenderer;
     private readonly visibleCells: boolean[][];
     private readonly unlockedLocks = new Set<string>();
     private readonly collectedKeys = new Set<string>();
@@ -58,30 +59,23 @@ export default class Maze {
         this.centerX = this.offsetX + gridWidth / 2;
         this.centerY = this.offsetY + gridHeight / 2;
 
-        grid.forEach((row, rowIndex) => {
-            this.tiles[rowIndex] = row.map((cell, columnIndex) => {
-                const { x, y } = this.cellCenter(rowIndex, columnIndex);
-                const tile = scene.add.rectangle(
-                    x,
-                    y,
-                    this.tileSize - GAME_SETTINGS.maze.tileGap,
-                    this.tileSize - GAME_SETTINGS.maze.tileGap,
-                    this.getCellColor(cell)
-                );
-                if (cell === GAME_SETTINGS.maze.symbols.veil) {
-                    tile.setAlpha(GAME_SETTINGS.maze.veilAlpha).setDepth(10);
-                } else if (this.isKey(cell)) {
-                    tile.setFillStyle(this.getKeyColor(cell));
-                } else if (this.isLock(cell)) {
-                    tile.setFillStyle(this.getLockColor(cell));
-                }
-                return tile;
-            });
-        });
+        this.renderer = new MazeRenderer(
+            scene,
+            grid,
+            this.tileSize,
+            this.offsetX,
+            this.offsetY
+        );
     }
 
     get startPosition(): GridPosition {
         return { ...this.start };
+    }
+
+    reset() {
+        this.unlockedLocks.clear();
+        this.collectedKeys.clear();
+        this.updateVisibility(this.start);
     }
 
     canPlayerOccupy(row: number, column: number): boolean {
@@ -107,7 +101,6 @@ export default class Maze {
         }
 
         this.collectedKeys.add(id);
-        this.tiles[position.row][position.column].setVisible(false);
         return key;
     }
 
@@ -132,9 +125,6 @@ export default class Maze {
             }
 
             this.unlockedLocks.add(id);
-            this.tiles[neighbor.row][neighbor.column]
-                .setFillStyle(GAME_SETTINGS.maze.openedLockColor)
-                .setAlpha(GAME_SETTINGS.maze.openedLockAlpha);
             unlockedAny = true;
         }
 
@@ -142,6 +132,10 @@ export default class Maze {
             this.updateVisibility(position);
         }
         return unlockedAny;
+    }
+
+    updateRendering(delta: number) {
+        this.renderer.update(delta);
     }
 
     getMarkerPositions(marker: string): GridPosition[] {
@@ -323,19 +317,17 @@ export default class Maze {
             }
         }
 
-        this.tiles.forEach((tileRow, rowIndex) => {
-            tileRow.forEach((tile, columnIndex) => {
-                tile.setVisible(
-                    visible[rowIndex][columnIndex] &&
-                    !this.collectedKeys.has(this.positionId({ row: rowIndex, column: columnIndex }))
-                );
-            });
-        });
         this.visibleCells.forEach((row, rowIndex) => {
             row.forEach((_, columnIndex) => {
                 this.visibleCells[rowIndex][columnIndex] = visible[rowIndex][columnIndex];
             });
         });
+        this.renderer.setVisibility(
+            visible,
+            position,
+            this.collectedKeys,
+            this.unlockedLocks
+        );
     }
 
     private isLockedCell(row: number, column: number): boolean {
@@ -358,24 +350,6 @@ export default class Maze {
             "3": "c"
         };
         return keyByLock[lock];
-    }
-
-    private getCellColor(cell: string): number {
-        switch (cell) {
-            case GAME_SETTINGS.maze.symbols.wall: return GAME_SETTINGS.maze.wallColor;
-            case GAME_SETTINGS.maze.symbols.start: return GAME_SETTINGS.maze.startColor;
-            case GAME_SETTINGS.maze.symbols.exit: return GAME_SETTINGS.maze.exitColor;
-            case GAME_SETTINGS.maze.symbols.veil: return GAME_SETTINGS.maze.veilColor;
-            default: return GAME_SETTINGS.maze.floorColor;
-        }
-    }
-
-    private getKeyColor(key: KeySymbol): number {
-        return GAME_SETTINGS.maze.keyColors[key];
-    }
-
-    private getLockColor(lock: LockSymbol): number {
-        return GAME_SETTINGS.maze.lockColors[lock];
     }
 
     private positionId(position: GridPosition): string {
