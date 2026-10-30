@@ -9,13 +9,13 @@ const config = {
   width: GAME_SETTINGS.viewport.width,
   height: GAME_SETTINGS.viewport.height,
   backgroundColor: GAME_SETTINGS.backgroundColor,
-  scene: Game
-}
+  scene: Game,
+};
 
 new Phaser.Game(config);
 
 let canvas = document.querySelector("canvas");
 if (canvas) {
-  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
   canvas.style.cursor = "none";
 }
