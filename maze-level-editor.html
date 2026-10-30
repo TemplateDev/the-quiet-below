@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Maze Level Editor</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f2f0f7;--panel:#fff;--ink:#1d1b2b;--mute:#6d6985;--line:#d9d5e8;--accent:#5b4bdb;--accent-ink:#fff;--cell-grid:rgba(0,0,0,.12);
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14121f;--panel:#1e1b2e;--ink:#ece9fa;--mute:#9b96b8;--line:#332f4a;--accent:#8c7dff;--accent-ink:#14121f;--cell-grid:rgba(255,255,255,.08);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#14121f;--panel:#1e1b2e;--ink:#ece9fa;--mute:#9b96b8;--line:#332f4a;--accent:#8c7dff;--accent-ink:#14121f;--cell-grid:rgba(255,255,255,.08);color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:15px}
+.app{display:grid;grid-template-columns:260px minmax(0,1fr) 280px;gap:14px;padding:14px;max-width:1500px;margin:0 auto}
+@media(max-width:1000px){.app{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+h1{font-size:20px;margin:0 0 2px;font-weight:700}
+h2{font-size:14px;margin:16px 0 8px;font-weight:600;color:var(--mute)}
+p.sub{margin:0;color:var(--mute);font-size:13px}
+.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+button,input{font:inherit;color:inherit}
+button{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 11px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,input:focus-visible,canvas:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+button.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);font-weight:600}
+input[type=number],input[type=text]{background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:7px 9px;width:100%}
+.row{display:flex;gap:8px;align-items:center}
+.row>*{flex:1}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pal{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.sw{display:flex;align-items:center;gap:8px;padding:6px 8px;text-align:left}
+.sw i{width:24px;height:24px;border-radius:5px;display:grid;place-items:center;font-style:normal;font-weight:700;font-size:14px;color:#fff;flex:none;text-shadow:0 1px 1px rgba(0,0,0,.5)}
+.sw span{font-size:12px;color:var(--mute);line-height:1.1}
+label.chk{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px}
+.stage{overflow:auto;max-height:calc(100vh - 150px);min-height:300px;display:grid;place-items:start center;padding:6px}
+canvas{touch-action:none;cursor:crosshair;border:1px solid var(--line);display:block}
+.status{margin-top:8px;color:var(--mute);font-size:13px;min-height:20px}
+.lvl{display:flex;align-items:center;gap:6px;padding:7px 8px;border:1px solid var(--line);border-radius:7px;margin-bottom:6px}
+.lvl.active{border-color:var(--accent)}
+.lvl b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.lvl small{color:var(--mute)}
+.lvl button{padding:3px 7px;font-size:12px}
+.empty{color:var(--mute);font-size:13px;padding:8px 0}
+#out{width:100%;height:220px;margin-top:8px;background:var(--bg);border:1px solid var(--line);border-radius:7px;padding:8px;font-size:12px;color:var(--ink);resize:vertical}
+.hide{display:none}
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="panel" aria-label="Tools">
+    <h1>Maze editor</h1>
+    <p class="sub">Paint a tilemap, save it, export every level at once.</p>
+
+    <h2>Grid size (border included)</h2>
+    <div class="row">
+      <label>Width<input id="w" type="number" min="3" value="15"></label>
+      <label>Height<input id="h" type="number" min="3" value="11"></label>
+    </div>
+    <div class="row" style="margin-top:8px"><button id="resize">Resize</button><button id="clear">Clear</button></div>
+    <label class="chk"><input id="border" type="checkbox" checked> Lock a # border around the edge</label>
+
+    <h2>Tool</h2>
+    <div class="tools">
+      <button id="t-brush" class="on">Paintbrush</button>
+      <button id="t-fill">Fill</button>
+    </div>
+    <div class="row" style="margin-top:8px"><button id="undo">Undo</button><button id="redo">Redo</button></div>
+
+    <h2>Tiles <span style="font-weight:400">(press the character to select)</span></h2>
+    <div class="pal" id="pal"></div>
+
+    <h2>Shortcuts</h2>
+    <div class="mono" style="font-size:12px;line-height:1.9;color:var(--mute)">
+      <div><b style="color:var(--ink)">P</b> paintbrush &nbsp; <b style="color:var(--ink)">F</b> fill</div>
+      <div><b style="color:var(--ink)">[</b> <b style="color:var(--ink)">]</b> previous / next tile</div>
+      <div><b style="color:var(--ink)">Right-click</b> pick tile from grid</div>
+      <div><b style="color:var(--ink)">Ctrl+Z</b> undo &nbsp; <b style="color:var(--ink)">Ctrl+Shift+Z</b> redo</div>
+      <div><b style="color:var(--ink)">Ctrl+S</b> save / update level</div>
+      <div><b style="color:var(--ink)">Ctrl+E</b> export all</div>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Canvas">
+    <div class="stage" id="stage"><canvas id="cv" tabindex="0" aria-label="Maze grid"></canvas></div>
+    <div class="status mono" id="status">Ready.</div>
+  </section>
+
+  <section class="panel" aria-label="Saved levels">
+    <h1 style="font-size:17px">Saved levels</h1>
+    <h2 style="margin-top:10px">Name</h2>
+    <input id="name" type="text" placeholder="Level 1">
+    <div class="row" style="margin-top:8px">
+      <button id="save" class="primary">Save as new</button>
+      <button id="update" class="hide">Update</button>
+    </div>
+    <h2>Your levels</h2>
+    <div id="list"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="export" class="primary">Export all</button>
+      <button id="newlvl">New level</button>
+    </div>
+    <div id="exp" class="hide">
+      <textarea id="out" class="mono" readonly spellcheck="false"></textarea>
+      <div class="row" style="margin-top:8px"><button id="copy">Copy</button><button id="dl">Download .js</button></div>
+    </div>
+  </section>
+</div>
+
+<script>
+const TILES=[
+ ['#','Wall','#4a4868'],['.','Floor','#2b2940'],['s','Start','#2fa866'],
+ ['e','End','#d94b4b'],['m','m','#d9a02f'],['v','v','#8a5bd6'],
+ ['a','a','#3b82d9'],['b','b','#1ba8a0'],['c','c','#d65b9e'],
+ ['1','1','#c9732b'],['2','2','#7d8a2f'],['3','3','#6b7fa8']
+];
+const COLOR=Object.fromEntries(TILES.map(t=>[t[0],t[2]]));
+const KEY='maze-editor-v1';
+let W=15,H=11,grid=[],tile='#',tool='brush',cell=32,drawing=false,last=null;
+let undoS=[],redoS=[],levels=[],activeId=null;
+const $=id=>document.getElementById(id);
+const cv=$('cv'),ctx=cv.getContext('2d');
+
+function blank(w,h,fill='.'){return Array.from({length:h},()=>Array(w).fill(fill))}
+function isBorder(x,y){return $('border').checked&&(x===0||y===0||x===W-1||y===H-1)}
+function applyBorder(){if(!$('border').checked)return;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(isBorder(x,y))grid[y][x]='#'}
+function snap(){return JSON.stringify(grid)}
+function pushUndo(){undoS.push(snap());if(undoS.length>100)undoS.shift();redoS=[]}
+function say(m){$('status').textContent=m}
+
+function layout(){
+  const avail=Math.max(200,$('stage').clientWidth-16);
+  cell=Math.max(10,Math.min(40,Math.floor(avail/W)));
+  cv.width=W*cell;cv.height=H*cell;draw();
+}
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.font='700 '+Math.floor(cell*.55)+'px "JetBrains Mono",monospace';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const c=grid[y][x];
+    ctx.fillStyle=COLOR[c]||'#000';ctx.fillRect(x*cell,y*cell,cell,cell);
+    if(cell>=14){ctx.fillStyle=c==='.'?'rgba(255,255,255,.28)':'rgba(255,255,255,.92)';ctx.fillText(c,x*cell+cell/2,y*cell+cell/2+1)}
+    if(isBorder(x,y)){ctx.fillStyle='rgba(0,0,0,.22)';ctx.fillRect(x*cell,y*cell,cell,cell)}
+  }
+  ctx.strokeStyle=getComputedStyle(document.documentElement).getPropertyValue('--cell-grid').trim()||'rgba(128,128,128,.2)';
+  ctx.lineWidth=1;ctx.beginPath();
+  for(let x=0;x<=W;x++){ctx.moveTo(x*cell+.5,0);ctx.lineTo(x*cell+.5,H*cell)}
+  for(let y=0;y<=H;y++){ctx.moveTo(0,y*cell+.5);ctx.lineTo(W*cell,y*cell+.5)}
+  ctx.stroke();
+}
+function pos(e){
+  const r=cv.getBoundingClientRect();
+  const x=Math.floor((e.clientX-r.left)*(cv.width/r.width)/cell);
+  const y=Math.floor((e.clientY-r.top)*(cv.height/r.height)/cell);
+  return (x>=0&&y>=0&&x<W&&y<H)?[x,y]:null;
+}
+function paint(x,y){if(!isBorder(x,y))grid[y][x]=tile}
+function line(a,b){
+  let [x0,y0]=a;const [x1,y1]=b;
+  const dx=Math.abs(x1-x0),dy=Math.abs(y1-y0),sx=x0<x1?1:-1,sy=y0<y1?1:-1;let err=dx-dy;
+  for(;;){paint(x0,y0);if(x0===x1&&y0===y1)break;const e2=2*err;if(e2>-dy){err-=dy;x0+=sx}if(e2<dx){err+=dx;y0+=sy}}
+}
+function flood(x,y){
+  if(isBorder(x,y))return;
+  const target=grid[y][x];if(target===tile)return;
+  const st=[[x,y]];
+  while(st.length){
+    const [cx,cy]=st.pop();
+    if(cx<0||cy<0||cx>=W||cy>=H||isBorder(cx,cy)||grid[cy][cx]!==target)continue;
+    grid[cy][cx]=tile;st.push([cx+1,cy],[cx-1,cy],[cx,cy+1],[cx,cy-1]);
+  }
+}
+cv.addEventListener('pointerdown',e=>{
+  if(e.button===2)return;
+  const p=pos(e);if(!p)return;
+  e.preventDefault();cv.setPointerCapture(e.pointerId);pushUndo();
+  if(tool==='fill'){flood(p[0],p[1]);draw();return}
+  drawing=true;last=p;paint(p[0],p[1]);draw();
+});
+cv.addEventListener('pointermove',e=>{
+  const p=pos(e);if(p)say('Column '+p[0]+', row '+p[1]+'  ['+grid[p[1]][p[0]]+']'+(isBorder(p[0],p[1])?'  border (locked)':''));
+  if(!drawing||!p)return;line(last,p);last=p;draw();
+});
+['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>{drawing=false;last=null}));
+
+function buildPalette(){
+  $('pal').innerHTML='';
+  TILES.forEach(([c,label,col])=>{
+    const b=document.createElement('button');b.className='sw'+(c===tile?' on':'');b.dataset.c=c;
+    b.title='Select "'+c+'"';
+    b.innerHTML='<i class="mono" style="background:'+col+'"></i><span>'+label+'</span>';
+    b.querySelector('i').textContent=c;
+    b.onclick=()=>{tile=c;buildPalette()};
+    $('pal').appendChild(b);
+  });
+}
+function setTool(t){tool=t;$('t-brush').classList.toggle('on',t==='brush');$('t-fill').classList.toggle('on',t==='fill')}
+$('t-brush').onclick=()=>setTool('brush');
+$('t-fill').onclick=()=>setTool('fill');
+
+function undo(){if(!undoS.length)return;redoS.push(snap());grid=JSON.parse(undoS.pop());W=grid[0].length;H=grid.length;syncSize();layout()}
+function redo(){if(!redoS.length)return;undoS.push(snap());grid=JSON.parse(redoS.pop());W=grid[0].length;H=grid.length;syncSize();layout()}
+function syncSize(){$('w').value=W;$('h').value=H}
+$('undo').onclick=undo;$('redo').onclick=redo;
+
+$('resize').onclick=()=>{
+  const nw=Math.max(3,parseInt($('w').value)||3),nh=Math.max(3,parseInt($('h').value)||3);
+  pushUndo();
+  const g=blank(nw,nh);
+  for(let y=0;y<Math.min(H,nh);y++)for(let x=0;x<Math.min(W,nw);x++)g[y][x]=grid[y][x];
+  grid=g;W=nw;H=nh;syncSize();applyBorder();layout();say('Resized to '+W+' x '+H+'.');
+};
+$('clear').onclick=()=>{pushUndo();grid=blank(W,H);applyBorder();draw();say('Cleared.')};
+$('border').onchange=()=>{pushUndo();applyBorder();draw()};
+
+document.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if((e.ctrlKey||e.metaKey)&&k==='s'){e.preventDefault();$('update').classList.contains('hide')?$('save').click():$('update').click();return}
+  if((e.ctrlKey||e.metaKey)&&k==='e'){e.preventDefault();$('export').click();return}
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redo():undo();return}
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'){e.preventDefault();redo();return}
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  if(COLOR[e.key]){tile=e.key;buildPalette();return}
+  if(k==='p'){setTool('brush');say('Paintbrush.')}
+  else if(k==='f'){setTool('fill');say('Fill.')}
+  else if(e.key==='['||e.key===']'){
+    const i=TILES.findIndex(t=>t[0]===tile),n=(i+(e.key===']'?1:-1)+TILES.length)%TILES.length;
+    tile=TILES[n][0];buildPalette();say('Tile: '+tile);
+  }
+});
+cv.addEventListener('contextmenu',e=>{
+  e.preventDefault();const p=pos(e);
+  if(p){tile=grid[p[1]][p[0]];buildPalette();say('Picked tile: '+tile)}
+});
+
+/* ---- saved levels ---- */
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(levels))}catch(e){}}
+function loadStore(){try{const s=localStorage.getItem(KEY);if(s)levels=JSON.parse(s)||[]}catch(e){levels=[]}}
+const rowsOf=g=>g.map(r=>r.join(''));
+function renderList(){
+  const L=$('list');L.innerHTML='';
+  $('update').classList.toggle('hide',!levels.some(l=>l.id===activeId));
+  if(!levels.length){L.innerHTML='<div class="empty">Nothing saved yet. Draw a maze and choose Save as new.</div>';return}
+  levels.forEach((l,i)=>{
+    const d=document.createElement('div');d.className='lvl'+(l.id===activeId?' active':'');
+    d.innerHTML='<b></b><small class="mono"></small>';
+    d.querySelector('b').textContent=l.name;
+    d.querySelector('small').textContent=l.rows[0].length+'x'+l.rows.length;
+    const mk=(t,fn,title)=>{const b=document.createElement('button');b.textContent=t;b.title=title;b.onclick=fn;d.appendChild(b)};
+    mk('↑',()=>move(i,-1),'Move up');mk('↓',()=>move(i,1),'Move down');
+    mk('Edit',()=>loadLevel(l),'Load into editor');mk('✕',()=>del(l.id),'Delete');
+    L.appendChild(d);
+  });
+}
+function move(i,d){const j=i+d;if(j<0||j>=levels.length)return;[levels[i],levels[j]]=[levels[j],levels[i]];persist();renderList()}
+function del(id){levels=levels.filter(l=>l.id!==id);if(activeId===id)activeId=null;persist();renderList();say('Level deleted.')}
+function loadLevel(l){
+  pushUndo();grid=l.rows.map(r=>r.split(''));W=grid[0].length;H=grid.length;
+  activeId=l.id;$('name').value=l.name;syncSize();layout();renderList();say('Loaded "'+l.name+'".');
+}
+function curName(){return $('name').value.trim()||('Level '+(levels.length+1))}
+$('save').onclick=()=>{
+  const l={id:Date.now(),name:curName(),rows:rowsOf(grid)};
+  levels.push(l);activeId=l.id;$('name').value=l.name;persist();renderList();say('Saved "'+l.name+'".');
+};
+$('update').onclick=()=>{
+  const l=levels.find(x=>x.id===activeId);if(!l)return;
+  l.name=curName();l.rows=rowsOf(grid);persist();renderList();say('Updated "'+l.name+'".');
+};
+$('newlvl').onclick=()=>{pushUndo();grid=blank(W,H);applyBorder();activeId=null;$('name').value='';draw();renderList();say('New level.')};
+
+function exportText(){
+  if(!levels.length)return '// No saved levels yet.\nconst mazes = [];\n';
+  const q=c=>"'"+c+"'";
+  const body=levels.map(l=>{
+    const rows=l.rows.map(r=>'    ['+r.split('').map(q).join(', ')+']').join(',\n');
+    return '  // '+l.name.replace(/[\r\n]+/g,' ')+'\n  [\n'+rows+'\n  ]';
+  }).join(',\n');
+  return 'const mazes = [\n'+body+'\n];\n';
+}
+$('export').onclick=()=>{$('out').value=exportText();$('exp').classList.remove('hide');say('Exported '+levels.length+' level(s).')};
+$('copy').onclick=async()=>{
+  const t=$('out');t.select();
+  try{await navigator.clipboard.writeText(t.value);say('Copied to clipboard.')}catch(e){document.execCommand&&document.execCommand('copy');say('Copied (or press Ctrl+C).')}
+};
+$('dl').onclick=()=>{
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([$('out').value],{type:'text/javascript'}));
+  a.download='mazes.js';document.body.appendChild(a);a.click();a.remove();
+};
+
+window.addEventListener('resize',layout);
+if(window.matchMedia)matchMedia('(prefers-color-scheme:dark)').addEventListener('change',draw);
+grid=blank(W,H);applyBorder();buildPalette();loadStore();renderList();layout();
+</script>
+</body>
+</html>
