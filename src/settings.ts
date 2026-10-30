@@ -19,12 +19,18 @@ export const GAME_SETTINGS = {
         visibilityRayLength: 12,
         wallColor: 0x111111,
         floorColor: 0x222222,
-        startColor: 0x22c55e,
-        exitColor: 0xef4444,
+        exitBorderColor: 0xef4444,
         veilColor: 0x888888,
         veilAlpha: 0.45,
         openedLockColor: 0x64748b,
         openedLockAlpha: 0.35,
+        keyGlowAlpha: 0.72,
+        keyHoverDistance: 0.1,
+        keyHoverDurationMs: 1100,
+        markerShrinkDurationMs: 240,
+        lockGlowAlpha: 0.78,
+        lockLightRadiusCells: 3.5,
+        lockLightIntensity: 0.85,
         keyColors: {
             a: 0xfacc15,
             b: 0x38bdf8,
@@ -81,7 +87,8 @@ export const GAME_SETTINGS = {
         staticHoldMs: 1000,
         staticFadeOutMs: 500,
         staticRefreshMs: 60,
-        hitStaticAlpha: 1
+        hitStaticAlpha: 1,
+        levelTransitionStaticMs: 500
     },
     audio: {
         ambienceKey: "ambience",

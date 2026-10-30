@@ -8,6 +8,7 @@ export interface GridPosition {
 }
 
 export type LevelGrid = readonly (readonly string[])[];
+export type MarkerInteraction = "key" | "gate";
 
 export default class Maze {
     private readonly renderer: MazeRenderer;
@@ -19,15 +20,18 @@ export default class Maze {
     private readonly offsetY: number;
     private readonly start: GridPosition;
     private readonly grid: LevelGrid;
+    private readonly onMarkerInteraction: (interaction: MarkerInteraction) => void;
     readonly playerRadius: number;
     readonly centerX: number;
     readonly centerY: number;
 
     constructor(
         scene: Phaser.Scene,
-        grid: LevelGrid
+        grid: LevelGrid,
+        onMarkerInteraction: (interaction: MarkerInteraction) => void
     ) {
         this.grid = grid;
+        this.onMarkerInteraction = onMarkerInteraction;
         const rows = grid.length;
         const columns = grid[0]?.length ?? 0;
         if (rows === 0 || columns === 0 || grid.some(row => row.length !== columns)) {
@@ -72,6 +76,11 @@ export default class Maze {
         return { ...this.start };
     }
 
+    isExitAt(position: GridPosition): boolean {
+        return this.grid[position.row]?.[position.column] ===
+            GAME_SETTINGS.maze.symbols.exit;
+    }
+
     reset() {
         this.unlockedLocks.clear();
         this.collectedKeys.clear();
@@ -101,6 +110,8 @@ export default class Maze {
         }
 
         this.collectedKeys.add(id);
+        this.renderer.animateMarkerInteraction(position);
+        this.onMarkerInteraction("key");
         return key;
     }
 
@@ -126,6 +137,8 @@ export default class Maze {
 
             this.unlockedLocks.add(id);
             unlockedAny = true;
+            this.renderer.animateMarkerInteraction(neighbor);
+            this.onMarkerInteraction("gate");
         }
 
         if (unlockedAny) {

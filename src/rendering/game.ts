@@ -13,16 +13,24 @@ export default class Game extends Phaser.Scene {
     private stepSound!: Phaser.Sound.BaseSound;
     private pendingStep = false;
     private pendingStinger = false;
-    private readonly pendingSounds: Array<{ key: string; volume: number }> = [];
+    private readonly pendingSounds: Array<{
+        key: string;
+        volume: number;
+        rate: number;
+    }> = [];
     private lastStingerAt = Number.NEGATIVE_INFINITY;
     private enemySightVignette!: Phaser.GameObjects.Image;
     private staticOverlay!: Phaser.GameObjects.Image;
     private staticTexture!: Phaser.Textures.CanvasTexture;
+    private staticColor: "red" | "gray" = "red";
     private staticRefreshElapsed = 0;
     private enemySightActive = false;
+    private isShowingLevelTransitionStatic = false;
     private cameraFocusX = 0;
     private cameraFocusY = 0;
     private isGameOver = false;
+    private isLevelTransitioning = false;
+    private currentLevelIndex: number = GAME_SETTINGS.levelIndex;
 
     preload() {
         this.load.audio(
@@ -55,8 +63,14 @@ export default class Game extends Phaser.Scene {
         );
     }
 
-    create() {
+    create(data: { levelIndex?: number; showLevelTransition?: boolean } = {}) {
+        if (data.levelIndex !== undefined) {
+            this.currentLevelIndex = data.levelIndex;
+        }
         this.isGameOver = false;
+        this.isLevelTransitioning = false;
+        this.isShowingLevelTransitionStatic =
+            data.showLevelTransition === true;
         this.pendingStep = false;
         this.pendingStinger = false;
         this.pendingSounds.length = 0;
@@ -72,9 +86,19 @@ export default class Game extends Phaser.Scene {
         this.startAmbienceWhenAudioIsReady();
         this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdownAudio, this);
         this.enemySightVignette = this.createEnemySightVignette();
-        this.staticOverlay = this.createStaticOverlay();
+        this.staticOverlay = this.createStaticOverlay(
+            data.showLevelTransition === true
+        );
 
-        this.maze = new Maze(this, levels[GAME_SETTINGS.levelIndex]);
+        this.maze = new Maze(
+            this,
+            levels[this.currentLevelIndex],
+            interaction => this.playOneShot(
+                GAME_SETTINGS.audio.bleepKey,
+                GAME_SETTINGS.audio.bleepVolume,
+                interaction === "key" ? 4 : 2
+            )
+        );
         this.player = new Player(this, this.maze, () => this.playStep());
         this.enemies = this.maze
             .getMarkerPositions(GAME_SETTINGS.maze.symbols.enemy)
@@ -93,6 +117,27 @@ export default class Game extends Phaser.Scene {
         this.cameraFocusX = cameraTarget.x;
         this.cameraFocusY = cameraTarget.y;
         this.cameras.main.centerOn(cameraTarget.x, cameraTarget.y);
+
+        if (data.showLevelTransition) {
+            this.tweens.add({
+                targets: this.staticOverlay,
+                alpha: 0,
+                duration: GAME_SETTINGS.effects.staticFadeOutMs,
+                ease: GAME_SETTINGS.effects.vignetteEase,
+                onComplete: () => {
+                    this.isShowingLevelTransitionStatic = false;
+                    if (this.enemySightActive) {
+                        this.setStaticColor("red");
+                        this.tweens.add({
+                            targets: this.staticOverlay,
+                            alpha: GAME_SETTINGS.effects.sightStaticAlpha,
+                            duration: GAME_SETTINGS.effects.vignetteTransitionMs,
+                            ease: GAME_SETTINGS.effects.vignetteEase
+                        });
+                    }
+                }
+            });
+        }
     }
 
     private startAmbienceWhenAudioIsReady() {
@@ -121,7 +166,11 @@ export default class Game extends Phaser.Scene {
             this.playOneShot(GAME_SETTINGS.audio.stingerKey, GAME_SETTINGS.audio.stingerVolume);
         }
         for (const pendingSound of this.pendingSounds.splice(0)) {
-            this.playOneShot(pendingSound.key, pendingSound.volume);
+            this.playOneShot(
+                pendingSound.key,
+                pendingSound.volume,
+                pendingSound.rate
+            );
         }
     }
 
@@ -147,7 +196,7 @@ export default class Game extends Phaser.Scene {
 
     update(time: number, delta: number) {
         this.updateStaticGrain(delta);
-        if (this.isGameOver) {
+        if (this.isGameOver || this.isLevelTransitioning) {
             return;
         }
 
@@ -162,6 +211,11 @@ export default class Game extends Phaser.Scene {
             )
         ) {
             this.handlePlayerHit();
+            return;
+        }
+        if (this.maze.isExitAt(this.player.position)) {
+            const nextLevelIndex = (this.currentLevelIndex + 1) % levels.length;
+            this.beginLevelTransition(nextLevelIndex);
             return;
         }
 
@@ -243,17 +297,20 @@ export default class Game extends Phaser.Scene {
             .setAlpha(0);
     }
 
-    private createStaticOverlay(): Phaser.GameObjects.Image {
+    private createStaticOverlay(showLevelTransition: boolean): Phaser.GameObjects.Image {
         const key = "static-grain";
-        const texture = this.textures.createCanvas(
-            key,
-            GAME_SETTINGS.viewport.width / 2.0,
-            GAME_SETTINGS.viewport.height / 2.0
-        );
+        const texture = this.textures.exists(key)
+            ? this.getStaticTexture(key)
+            : this.textures.createCanvas(
+                key,
+                GAME_SETTINGS.viewport.width / 2.0,
+                GAME_SETTINGS.viewport.height / 2.0
+            );
         if (!texture) {
             throw new Error("Unable to create the static grain texture.");
         }
         this.staticTexture = texture;
+        this.staticColor = showLevelTransition ? "gray" : "red";
         this.refreshStaticTexture();
 
         return this.add.image(0, 0, key)
@@ -261,7 +318,15 @@ export default class Game extends Phaser.Scene {
             .setScrollFactor(0)
             .setDisplaySize(GAME_SETTINGS.viewport.width, GAME_SETTINGS.viewport.height)
             .setDepth(10001)
-            .setAlpha(0);
+            .setAlpha(showLevelTransition ? 1 : 0);
+    }
+
+    private getStaticTexture(key: string): Phaser.Textures.CanvasTexture {
+        const texture = this.textures.get(key);
+        if (!(texture instanceof Phaser.Textures.CanvasTexture)) {
+            throw new Error(`Texture '${key}' exists but is not a canvas texture.`);
+        }
+        return texture;
     }
 
     private refreshStaticTexture() {
@@ -269,13 +334,24 @@ export default class Game extends Phaser.Scene {
         const imageData = context.createImageData(width, height);
         for (let pixel = 0; pixel < imageData.data.length; pixel += 4) {
             const shade = Phaser.Math.Between(80, 255);
-            imageData.data[pixel] = shade;
-            imageData.data[pixel + 1] = shade / 5.0;
-            imageData.data[pixel + 2] = shade / 5.0;
+            imageData.data[pixel] =
+                this.staticColor === "gray" ? shade / 4.0 : shade;
+            imageData.data[pixel + 1] =
+                this.staticColor === "gray" ? shade / 4.0 : shade / 5.0;
+            imageData.data[pixel + 2] =
+                this.staticColor === "gray" ? shade / 4.0 : shade / 5.0;
             imageData.data[pixel + 3] = Phaser.Math.Between(255, 255);
         }
         context.putImageData(imageData, 0, 0);
         this.staticTexture.refresh();
+    }
+
+    private setStaticColor(color: "red" | "gray") {
+        if (this.staticColor === color) {
+            return;
+        }
+        this.staticColor = color;
+        this.refreshStaticTexture();
     }
 
     private updateStaticGrain(delta: number) {
@@ -298,6 +374,9 @@ export default class Game extends Phaser.Scene {
         }
 
         this.enemySightActive = enemySightActive;
+        if (enemySightActive && !this.isShowingLevelTransitionStatic) {
+            this.setStaticColor("red");
+        }
         this.tweens.killTweensOf(this.enemySightVignette);
         this.tweens.add({
             targets: this.enemySightVignette,
@@ -307,13 +386,15 @@ export default class Game extends Phaser.Scene {
             duration: GAME_SETTINGS.effects.vignetteTransitionMs,
             ease: GAME_SETTINGS.effects.vignetteEase
         });
-        this.tweens.killTweensOf(this.staticOverlay);
-        this.tweens.add({
-            targets: this.staticOverlay,
-            alpha: enemySightActive ? GAME_SETTINGS.effects.sightStaticAlpha : 0,
-            duration: GAME_SETTINGS.effects.vignetteTransitionMs,
-            ease: GAME_SETTINGS.effects.vignetteEase
-        });
+        if (!this.isShowingLevelTransitionStatic) {
+            this.tweens.killTweensOf(this.staticOverlay);
+            this.tweens.add({
+                targets: this.staticOverlay,
+                alpha: enemySightActive ? GAME_SETTINGS.effects.sightStaticAlpha : 0,
+                duration: GAME_SETTINGS.effects.vignetteTransitionMs,
+                ease: GAME_SETTINGS.effects.vignetteEase
+            });
+        }
 
         this.tweens.killTweensOf(this.cameras.main);
         this.tweens.add({
@@ -342,7 +423,7 @@ export default class Game extends Phaser.Scene {
 
     private playOneShot(key: string, volume: number, rate: number = 1.0) {
         if (this.sound.locked) {
-            this.pendingSounds.push({ key, volume });
+            this.pendingSounds.push({ key, volume, rate });
             return;
         }
         this.sound.play(key, { volume, rate });
@@ -350,6 +431,7 @@ export default class Game extends Phaser.Scene {
 
     private handlePlayerHit() {
         this.isGameOver = true;
+        this.setStaticColor("red");
         this.playOneShot(GAME_SETTINGS.audio.hitKey, GAME_SETTINGS.audio.hitVolume);
         this.playOneShot(GAME_SETTINGS.audio.failKey, GAME_SETTINGS.audio.failVolume, 2.0);
         this.updateEnemySightEffects(false);
@@ -386,6 +468,25 @@ export default class Game extends Phaser.Scene {
 
         this.playOneShot(GAME_SETTINGS.audio.spawnKey, GAME_SETTINGS.audio.spawnVolume);
         this.playOneShot(GAME_SETTINGS.audio.bleepKey, GAME_SETTINGS.audio.bleepVolume);
+    }
+
+    private beginLevelTransition(nextLevelIndex: number) {
+        this.isLevelTransitioning = true;
+        this.isShowingLevelTransitionStatic = true;
+        this.setStaticColor("gray");
+        this.tweens.killTweensOf(this.staticOverlay);
+        this.staticOverlay.setAlpha(1);
+        this.playOneShot(
+            GAME_SETTINGS.audio.spawnKey,
+            GAME_SETTINGS.audio.spawnVolume
+        );
+        this.time.delayedCall(
+            GAME_SETTINGS.effects.levelTransitionStaticMs,
+            () => this.scene.restart({
+                levelIndex: nextLevelIndex,
+                showLevelTransition: true
+            })
+        );
     }
 
     private playEnemyStep(position: { row: number; column: number }) {

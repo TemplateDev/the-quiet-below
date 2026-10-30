@@ -4,10 +4,13 @@ import type { GridPosition, LevelGrid } from "./maze";
 
 type CellVisual = {
     tile: Phaser.GameObjects.Rectangle;
+    decoration: Phaser.GameObjects.Container | null;
     color: number;
     baseAlpha: number;
     currentAlpha: number;
     targetAlpha: number;
+    currentDecorationAlpha: number;
+    targetDecorationAlpha: number;
     currentBrightness: number;
     targetBrightness: number;
 };
@@ -25,6 +28,7 @@ export default class MazeRenderer {
     private particleVisibilityElapsed = 0;
     private readonly scene: Phaser.Scene;
     private readonly grid: LevelGrid;
+    private readonly lockPositions: GridPosition[] = [];
     private readonly tileSize: number;
     private readonly offsetX: number;
     private readonly offsetY: number;
@@ -38,6 +42,13 @@ export default class MazeRenderer {
     ) {
         this.scene = scene;
         this.grid = grid;
+        grid.forEach((row, rowIndex) => {
+            row.forEach((symbol, columnIndex) => {
+                if (this.isLock(symbol)) {
+                    this.lockPositions.push({ row: rowIndex, column: columnIndex });
+                }
+            });
+        });
         this.tileSize = tileSize;
         this.offsetX = offsetX;
         this.offsetY = offsetY;
@@ -62,16 +73,21 @@ export default class MazeRenderer {
                     this.isLock(this.grid[rowIndex][columnIndex]) && unlockedLocks.has(id);
                 const targetColor = isUnlockedLock
                     ? GAME_SETTINGS.maze.openedLockColor
-                    : this.getCellColor(this.grid[rowIndex][columnIndex]);
+                    : this.getFloorColor(this.grid[rowIndex][columnIndex]);
                 const isIlluminated = visible[rowIndex][columnIndex] && !isCollected;
                 const distance = Math.hypot(
                     rowIndex - playerPosition.row,
                     columnIndex - playerPosition.column
                 );
-                const brightness = Math.max(
+                const playerBrightness = Math.max(
                     GAME_SETTINGS.rendering.minimumBrightness,
                     1 - distance / GAME_SETTINGS.rendering.darknessDistance
                 );
+                const gateLight = this.getGateLightBrightness(
+                    position,
+                    unlockedLocks
+                );
+                const brightness = Math.max(playerBrightness, gateLight);
 
                 cell.baseAlpha = isUnlockedLock
                     ? GAME_SETTINGS.maze.openedLockAlpha
@@ -79,6 +95,10 @@ export default class MazeRenderer {
                         ? GAME_SETTINGS.maze.veilAlpha
                         : 1;
                 cell.targetAlpha = isIlluminated ? cell.baseAlpha : 0;
+                cell.targetDecorationAlpha =
+                    isIlluminated && !isCollected && !isUnlockedLock
+                        ? cell.baseAlpha
+                        : 0;
                 cell.targetBrightness = brightness;
                 const colorChanged = cell.color !== targetColor;
                 cell.color = targetColor;
@@ -86,9 +106,19 @@ export default class MazeRenderer {
                 if (cell.targetAlpha > 0) {
                     cell.tile.setVisible(true);
                 }
+                if (cell.targetDecorationAlpha > 0) {
+                    if (cell.currentDecorationAlpha === 0) {
+                        if (cell.decoration) {
+                            this.scene.tweens.killTweensOf(cell.decoration);
+                        }
+                        cell.decoration?.setScale(1);
+                    }
+                    cell.decoration?.setVisible(true);
+                }
                 if (
                     colorChanged ||
                     Math.abs(cell.currentAlpha - cell.targetAlpha) > 0.01 ||
+                    Math.abs(cell.currentDecorationAlpha - cell.targetDecorationAlpha) > 0.01 ||
                     Math.abs(cell.currentBrightness - cell.targetBrightness) > 0.01
                 ) {
                     this.transitioningCells.add(cell);
@@ -96,6 +126,26 @@ export default class MazeRenderer {
                     this.transitioningCells.delete(cell);
                 }
             });
+        });
+    }
+
+    animateMarkerInteraction(position: GridPosition) {
+        const decoration = this.cells[position.row]?.[position.column]?.decoration;
+        if (!decoration) {
+            return;
+        }
+
+        this.scene.tweens.add({
+            targets: decoration,
+            scale: 0,
+            duration: GAME_SETTINGS.maze.markerShrinkDurationMs,
+            ease: "Back.easeIn",
+            onComplete: () => {
+                const cell = this.cells[position.row]?.[position.column];
+                if (cell?.targetDecorationAlpha === 0) {
+                    decoration.setVisible(false);
+                }
+            }
         });
     }
 
@@ -121,28 +171,27 @@ export default class MazeRenderer {
                     y,
                     this.tileSize - GAME_SETTINGS.maze.tileGap,
                     this.tileSize - GAME_SETTINGS.maze.tileGap,
-                    this.getCellColor(symbol)
+                    this.getFloorColor(symbol)
                 );
                 if (this.isVeil(symbol)) {
                     tile.setDepth(10);
                 }
+                const decoration = this.createDecoration(symbol, x, y);
                 const baseAlpha = this.isVeil(symbol)
                     ? GAME_SETTINGS.maze.veilAlpha
                     : 1;
                 const cell: CellVisual = {
                     tile: tile.setVisible(false).setAlpha(0),
-                    color: this.getCellColor(symbol),
+                    decoration,
+                    color: this.getFloorColor(symbol),
                     baseAlpha,
                     currentAlpha: 0,
                     targetAlpha: 0,
+                    currentDecorationAlpha: 0,
+                    targetDecorationAlpha: 0,
                     currentBrightness: GAME_SETTINGS.rendering.minimumBrightness,
                     targetBrightness: GAME_SETTINGS.rendering.minimumBrightness
                 };
-                if (this.isKey(symbol)) {
-                    cell.color = this.getKeyColor(symbol);
-                } else if (this.isLock(symbol)) {
-                    cell.color = this.getLockColor(symbol);
-                }
                 tile.setFillStyle(cell.color);
                 return cell;
             });
@@ -204,6 +253,11 @@ export default class MazeRenderer {
                 cell.targetAlpha,
                 amount
             );
+            cell.currentDecorationAlpha = Phaser.Math.Linear(
+                cell.currentDecorationAlpha,
+                cell.targetDecorationAlpha,
+                amount
+            );
             cell.currentBrightness = Phaser.Math.Linear(
                 cell.currentBrightness,
                 cell.targetBrightness,
@@ -212,16 +266,24 @@ export default class MazeRenderer {
             cell.tile
                 .setAlpha(cell.currentAlpha)
                 .setFillStyle(this.scaleColor(cell.color, cell.currentBrightness));
+            cell.decoration?.setAlpha(cell.currentDecorationAlpha);
 
             const alphaSettled = Math.abs(cell.currentAlpha - cell.targetAlpha) < 0.01;
+            const decorationAlphaSettled =
+                Math.abs(cell.currentDecorationAlpha - cell.targetDecorationAlpha) < 0.01;
             const brightnessSettled =
                 Math.abs(cell.currentBrightness - cell.targetBrightness) < 0.01;
-            if (alphaSettled && brightnessSettled) {
+            if (alphaSettled && decorationAlphaSettled && brightnessSettled) {
                 cell.currentAlpha = cell.targetAlpha;
+                cell.currentDecorationAlpha = cell.targetDecorationAlpha;
                 cell.currentBrightness = cell.targetBrightness;
                 cell.tile.setAlpha(cell.currentAlpha);
+                cell.decoration?.setAlpha(cell.currentDecorationAlpha);
                 if (cell.currentAlpha === 0) {
                     cell.tile.setVisible(false);
+                }
+                if (cell.currentDecorationAlpha === 0) {
+                    cell.decoration?.setVisible(false);
                 }
                 this.transitioningCells.delete(cell);
             }
@@ -302,17 +364,192 @@ export default class MazeRenderer {
         return (red << 16) | (green << 8) | blue;
     }
 
-    private getCellColor(symbol: string): number {
+    private getFloorColor(symbol: string): number {
         switch (symbol) {
             case GAME_SETTINGS.maze.symbols.wall: return GAME_SETTINGS.maze.wallColor;
-            case GAME_SETTINGS.maze.symbols.start: return GAME_SETTINGS.maze.startColor;
-            case GAME_SETTINGS.maze.symbols.exit: return GAME_SETTINGS.maze.exitColor;
             case GAME_SETTINGS.maze.symbols.veil: return GAME_SETTINGS.maze.veilColor;
-            default:
-                if (this.isKey(symbol)) return this.getKeyColor(symbol);
-                if (this.isLock(symbol)) return this.getLockColor(symbol);
-                return GAME_SETTINGS.maze.floorColor;
+            default: return GAME_SETTINGS.maze.floorColor;
         }
+    }
+
+    private createDecoration(
+        symbol: string,
+        x: number,
+        y: number
+    ): Phaser.GameObjects.Container | null {
+        if (symbol === GAME_SETTINGS.maze.symbols.exit) {
+            return this.createExitMarker(x, y);
+        }
+        if (this.isKey(symbol)) {
+            return this.createKeyMarker(x, y, symbol);
+        }
+        if (this.isLock(symbol)) {
+            return this.createGateMarker(x, y, symbol);
+        }
+        return null;
+    }
+
+    private createExitMarker(x: number, y: number) {
+        const container = this.scene.add.container(x, y).setDepth(3);
+        const size = this.tileSize - GAME_SETTINGS.maze.tileGap;
+        const border = this.scene.add.graphics();
+        border.lineStyle(
+            Math.max(2, this.tileSize * 0.055),
+            GAME_SETTINGS.maze.exitBorderColor,
+            1
+        );
+        border.strokeRect(-size / 2, -size / 2, size, size);
+        container.add(border);
+        return container.setVisible(false).setAlpha(0);
+    }
+
+    private createKeyMarker(x: number, y: number, key: KeySymbol) {
+        const container = this.scene.add.container(x, y).setDepth(3);
+        const glow = this.scene.add.container(0, 0);
+        const size = this.tileSize * 0.23;
+        const points = this.diamondPoints(size);
+        for (const [scale, alpha] of [[1.8, 0.1], [1.4, 0.28]]) {
+            const glowShape = this.scene.add.graphics();
+            glowShape.fillStyle(
+                this.getKeyColor(key),
+                GAME_SETTINGS.maze.keyGlowAlpha * alpha
+            );
+            glowShape.fillPoints(this.diamondPoints(size * scale), true);
+            glow.add(glowShape);
+        }
+
+        const face = this.scene.add.graphics();
+        face.fillStyle(this.getKeyColor(key), 1);
+        face.fillPoints(points, true);
+        face.lineStyle(Math.max(1, this.tileSize * 0.025), 0xffffff, 0.9);
+        face.strokePoints(points, true);
+
+        const highlight = this.scene.add.graphics();
+        highlight.fillStyle(0xffffff, 0.48);
+        highlight.fillPoints(this.diamondPoints(size * 0.36, -size * 0.1), true);
+        container.add([glow, face, highlight]);
+        this.scene.tweens.add({
+            targets: container,
+            y: y - this.tileSize * GAME_SETTINGS.maze.keyHoverDistance,
+            duration: GAME_SETTINGS.maze.keyHoverDurationMs,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut"
+        });
+        this.scene.tweens.add({
+            targets: glow,
+            alpha: { from: 0.55, to: 1 },
+            duration: GAME_SETTINGS.maze.keyHoverDurationMs,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut"
+        });
+        return container.setVisible(false).setAlpha(0);
+    }
+
+    private createGateMarker(x: number, y: number, lock: LockSymbol) {
+        const container = this.scene.add.container(x, y).setDepth(3);
+        const color = this.getLockColor(lock);
+        const width = this.tileSize * 0.5;
+        const height = this.tileSize * 0.62;
+        const glow = this.scene.add.graphics();
+        glow.lineStyle(
+            Math.max(6, this.tileSize * 0.2),
+            color,
+            GAME_SETTINGS.maze.lockGlowAlpha * 0.12
+        );
+        glow.strokeRoundedRect(
+            -width / 2,
+            -height / 2,
+            width,
+            height,
+            this.tileSize * 0.08
+        );
+        glow.lineStyle(
+            Math.max(3, this.tileSize * 0.1),
+            color,
+            GAME_SETTINGS.maze.lockGlowAlpha * 0.3
+        );
+        glow.strokeRoundedRect(
+            -width / 2,
+            -height / 2,
+            width,
+            height,
+            this.tileSize * 0.08
+        );
+
+        const frame = this.scene.add.graphics();
+        frame.fillStyle(0x101014, 0.94);
+        frame.fillRoundedRect(
+            -width / 2,
+            -height / 2,
+            width,
+            height,
+            this.tileSize * 0.08
+        );
+        frame.lineStyle(Math.max(2, this.tileSize * 0.035), color, 1);
+        frame.strokeRoundedRect(
+            -width / 2,
+            -height / 2,
+            width,
+            height,
+            this.tileSize * 0.08
+        );
+        frame.fillStyle(color, 0.95);
+        const barWidth = this.tileSize * 0.065;
+        for (const offset of [-0.28, 0, 0.28]) {
+            frame.fillRoundedRect(
+                offset * width - barWidth / 2,
+                -height * 0.34,
+                barWidth,
+                height * 0.68,
+                barWidth / 2
+            );
+        }
+        container.add([glow, frame]);
+        this.scene.tweens.add({
+            targets: glow,
+            alpha: { from: 0.68, to: 1 },
+            duration: 900,
+            yoyo: true,
+            repeat: -1,
+            ease: "Sine.easeInOut"
+        });
+        return container.setVisible(false).setAlpha(0);
+    }
+
+    private diamondPoints(size: number, offsetY = 0) {
+        return [
+            new Phaser.Math.Vector2(0, -size + offsetY),
+            new Phaser.Math.Vector2(size, offsetY),
+            new Phaser.Math.Vector2(0, size + offsetY),
+            new Phaser.Math.Vector2(-size, offsetY)
+        ];
+    }
+
+    private getGateLightBrightness(
+        position: GridPosition,
+        unlockedLocks: ReadonlySet<string>
+    ) {
+        let brightness: number = GAME_SETTINGS.rendering.minimumBrightness;
+        const radius = GAME_SETTINGS.maze.lockLightRadiusCells;
+        for (const lockPosition of this.lockPositions) {
+            if (unlockedLocks.has(this.positionId(lockPosition))) {
+                continue;
+            }
+
+            const distance = Math.hypot(
+                position.row - lockPosition.row,
+                position.column - lockPosition.column
+            );
+            const falloff = Phaser.Math.Clamp(1 - distance / radius, 0, 1);
+            const smoothFalloff = falloff * falloff * (3 - 2 * falloff);
+            brightness = Math.max(
+                brightness,
+                GAME_SETTINGS.maze.lockLightIntensity * smoothFalloff
+            );
+        }
+        return brightness;
     }
 
     private getKeyColor(key: KeySymbol): number {
