@@ -3,7 +3,7 @@ export const GAME_SETTINGS = {
         width: window.innerWidth,
         height: window.innerHeight
     },
-    levelIndex: 1,
+    levelIndex: 0,
     backgroundColor: "#000000",
     maze: {
         symbols: {

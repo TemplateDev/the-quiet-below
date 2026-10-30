@@ -5,6 +5,7 @@ import "./index.css";
 
 const config = {
   type: Phaser.AUTO,
+  parent: "app",
   width: GAME_SETTINGS.viewport.width,
   height: GAME_SETTINGS.viewport.height,
   backgroundColor: GAME_SETTINGS.backgroundColor,
