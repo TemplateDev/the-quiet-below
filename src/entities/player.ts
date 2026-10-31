@@ -16,6 +16,7 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
   private readonly keys = new Set<string>();
   private readonly onStep: () => void;
   private bufferedMove: GridPosition | null = null;
+  private touchDirection: GridPosition | null = null;
   private nextMoveAt = 0;
 
   constructor(scene: Phaser.Scene, maze: Maze, onStep: () => void) {
@@ -45,28 +46,32 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
     maze.updateVisibility(this.position);
   }
 
+  setTouchDirection(direction: GridPosition | null) {
+    this.touchDirection = direction ? { ...direction } : null;
+  }
+
   update(time: number) {
     this.maze.unlockAdjacentLocks(this.position, this.keys);
 
-    const move = this.readMovementInput();
-    if (move) {
-      this.bufferedMove = move;
+    const keyboardMove = this.readKeyboardMovement();
+    if (keyboardMove) {
+      this.bufferedMove = keyboardMove;
     }
 
     if (time < this.nextMoveAt) {
       return;
     }
 
-    const bufferedMove = this.bufferedMove;
+    const move = this.bufferedMove ?? this.touchDirection;
     this.bufferedMove = null;
-    if (!bufferedMove) {
+    if (!move) {
       return;
     }
 
     const moved = this.moveTo(
       {
-        row: this.row + bufferedMove.row,
-        column: this.column + bufferedMove.column,
+        row: this.row + move.row,
+        column: this.column + move.column,
       },
       (row, column) => this.maze.canPlayerOccupy(row, column),
     );
@@ -87,12 +92,13 @@ export default class Player extends Entity<Phaser.GameObjects.Arc> {
   reset() {
     this.keys.clear();
     this.bufferedMove = null;
+    this.touchDirection = null;
     this.nextMoveAt = 0;
     this.resetPosition(this.maze.startPosition);
     this.maze.updateVisibility(this.position);
   }
 
-  private readMovementInput(): GridPosition | null {
+  private readKeyboardMovement(): GridPosition | null {
     const up =
       Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
       Phaser.Input.Keyboard.JustDown(this.wasdKeys.up);

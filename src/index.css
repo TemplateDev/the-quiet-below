@@ -51,6 +51,13 @@ button {
   display: flex;
 }
 
+.game-ui.is-playing {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .menu-backdrop {
   position: fixed;
   inset: 0;
@@ -188,6 +195,93 @@ button {
   text-transform: uppercase;
   cursor: pointer;
   backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.movement-hint {
+  position: fixed;
+  top: calc(20px + env(safe-area-inset-top, 0px));
+  left: calc(22px + env(safe-area-inset-left, 0px));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  border: 1px solid rgb(205 215 204 / 24%);
+  background: rgb(9 12 11 / 74%);
+  color: #b7c0b7;
+  font-size: 0.62rem;
+  letter-spacing: 0.12em;
+  backdrop-filter: blur(8px);
+}
+
+.movement-hint kbd {
+  color: #e0e5dd;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.touch-controls {
+  position: fixed;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  left: 50%;
+  display: none;
+  grid-template-columns: repeat(3, 60px);
+  grid-template-rows: repeat(2, 60px);
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgb(205 215 204 / 20%);
+  border-radius: 20px;
+  background: rgb(9 12 11 / 66%);
+  transform: translateX(-50%);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-button {
+  display: grid;
+  width: 60px;
+  height: 60px;
+  place-items: center;
+  border: 1px solid rgb(205 215 204 / 34%);
+  border-radius: 14px;
+  background: rgb(61 72 64 / 78%);
+  color: #f0f2ec;
+  font-size: 1.65rem;
+  line-height: 1;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+.touch-button:active {
+  border-color: #b5c3b4;
+  background: rgb(117 137 120 / 92%);
+}
+
+.touch-button:focus-visible {
+  outline: 2px solid #d5dfd3;
+  outline-offset: 2px;
+}
+
+.touch-button--up {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.touch-button--left {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.touch-button--down {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.touch-button--right {
+  grid-column: 3;
+  grid-row: 2;
 }
 
 .pause-control:hover,
@@ -373,6 +467,46 @@ button {
 
   .level-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .touch-controls {
+    display: grid;
+  }
+
+  .movement-hint {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    left: calc(12px + env(safe-area-inset-left, 0px));
+    gap: 7px;
+    padding: 8px 10px;
+    font-size: 0.56rem;
+    white-space: nowrap;
+  }
+
+  .movement-hint span {
+    display: none;
+  }
+
+  .pause-control {
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    min-width: 0;
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 760px) and (max-height: 500px) {
+  .touch-controls {
+    grid-template-columns: repeat(3, 48px);
+    grid-template-rows: repeat(2, 48px);
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .touch-button {
+    width: 48px;
+    height: 48px;
   }
 }
 

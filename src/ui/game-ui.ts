@@ -1,4 +1,5 @@
 import levels from "../maze/levels";
+import type { GridPosition } from "../maze/maze";
 
 type GameScreen = "title" | "levels" | "playing" | "pause" | "complete" | "hidden";
 
@@ -9,10 +10,17 @@ type GameUiActions = {
   showLevels: () => void;
   showTitle: () => void;
   resetProgress: () => void;
+  setTouchDirection: (direction: GridPosition | null) => void;
 };
 
 // Key used for localstorage persistence
 const PROGRESS_KEY = "maze-game-highest-unlocked-level";
+const TOUCH_DIRECTIONS = {
+  up: { row: -1, column: 0 },
+  left: { row: 0, column: -1 },
+  down: { row: 1, column: 0 },
+  right: { row: 0, column: 1 },
+} as const;
 const MINI_MAZE = [
   "###########",
   "#...#.....#",
@@ -33,6 +41,14 @@ export default class GameUi {
   private screen: GameScreen = "hidden";
   private highestUnlockedLevel = 0;
   private storageError = false;
+  private showMovementHint = false;
+  private readonly activeTouchPointers = new Map<number, GridPosition>();
+  private readonly handlePointerEnd = (event: PointerEvent) => {
+    if (this.activeTouchPointers.delete(event.pointerId)) {
+      this.updateTouchDirection();
+    }
+  };
+  private readonly handleWindowBlur = () => this.clearTouchDirections();
   private readonly handleKeyDown = (event: KeyboardEvent) => {
     if (event.key !== "Escape") {
       return;
@@ -54,11 +70,15 @@ export default class GameUi {
     this.root.setAttribute("aria-live", "polite");
     (document.querySelector("#app") ?? document.body).append(this.root);
     document.addEventListener("keydown", this.handleKeyDown);
+    window.addEventListener("pointerup", this.handlePointerEnd);
+    window.addEventListener("pointercancel", this.handlePointerEnd);
+    window.addEventListener("blur", this.handleWindowBlur);
     this.highestUnlockedLevel = this.loadProgress();
   }
 
-  show(screen: GameScreen) {
+  show(screen: GameScreen, showMovementHint = false) {
     this.screen = screen;
+    this.showMovementHint = screen === "playing" && showMovementHint;
     this.render();
   }
 
@@ -91,6 +111,10 @@ export default class GameUi {
 
   destroy() {
     document.removeEventListener("keydown", this.handleKeyDown);
+    window.removeEventListener("pointerup", this.handlePointerEnd);
+    window.removeEventListener("pointercancel", this.handlePointerEnd);
+    window.removeEventListener("blur", this.handleWindowBlur);
+    this.clearTouchDirections();
     this.root.remove();
   }
 
@@ -111,15 +135,20 @@ export default class GameUi {
   }
 
   private render() {
+    this.clearTouchDirections();
     this.root.replaceChildren();
     this.root.classList.toggle("is-visible", this.screen !== "hidden");
+    this.root.classList.toggle("is-playing", this.screen === "playing");
     if (this.screen === "hidden") {
       return;
     }
     if (this.screen === "playing") {
+      if (this.showMovementHint) {
+        this.root.append(this.createMovementHint());
+      }
       const pause = this.createButton("Pause", "pause-control", this.actions.pause);
       pause.setAttribute("aria-label", "Pause game");
-      this.root.append(pause);
+      this.root.append(pause, this.createTouchControls());
       return;
     }
 
@@ -149,6 +178,60 @@ export default class GameUi {
     }
 
     this.root.append(backdrop, panel);
+  }
+
+  private createMovementHint() {
+    const hint = document.createElement("aside");
+    hint.className = "movement-hint";
+    hint.setAttribute("aria-label", "Move with WASD or the arrow keys");
+
+    const label = document.createElement("span");
+    label.textContent = "MOVE";
+    const wasd = document.createElement("kbd");
+    wasd.textContent = "W A S D";
+    const separator = document.createElement("span");
+    separator.textContent = "OR";
+    const arrows = document.createElement("kbd");
+    arrows.textContent = "↑ ↓ ← →";
+
+    hint.append(label, wasd, separator, arrows);
+    return hint;
+  }
+
+  private createTouchControls() {
+    const controls = document.createElement("div");
+    controls.className = "touch-controls";
+    controls.setAttribute("role", "group");
+    controls.setAttribute("aria-label", "Touch movement controls");
+
+    for (const direction of ["up", "left", "down", "right"] as const) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `touch-button touch-button--${direction}`;
+      button.setAttribute("aria-label", `Move ${direction}`);
+      button.textContent = { up: "↑", left: "←", down: "↓", right: "→" }[direction];
+      button.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        this.activeTouchPointers.set(event.pointerId, TOUCH_DIRECTIONS[direction]);
+        this.updateTouchDirection();
+      });
+      controls.append(button);
+    }
+
+    return controls;
+  }
+
+  private updateTouchDirection() {
+    let direction: GridPosition | null = null;
+    for (const activeDirection of this.activeTouchPointers.values()) {
+      direction = activeDirection;
+    }
+    this.actions.setTouchDirection(direction);
+  }
+
+  private clearTouchDirections() {
+    this.activeTouchPointers.clear();
+    this.actions.setTouchDirection(null);
   }
 
   private renderTitle(panel: HTMLElement) {

@@ -90,7 +90,7 @@ export default class Game extends Phaser.Scene {
         pause: () => this.pauseGame(),
         resume: () => {
           this.isPaused = false;
-          this.ui.show("playing");
+          this.ui.show("playing", this.currentLevelIndex === 0);
           this.scene.resume();
         },
         showLevels: () =>
@@ -104,6 +104,7 @@ export default class Game extends Phaser.Scene {
             screen: "title",
           }),
         resetProgress: () => this.ui.resetProgress(),
+        setTouchDirection: (direction) => this.player?.setTouchDirection(direction),
       });
     }
     if (this.mode === "menu") {
@@ -112,7 +113,7 @@ export default class Game extends Phaser.Scene {
     }
 
     this.isPaused = false;
-    this.ui.show("playing");
+    this.ui.show("playing", this.currentLevelIndex === 0);
     this.pendingStep = false;
     this.pendingStinger = false;
     this.pendingSounds.length = 0;
