@@ -97,7 +97,7 @@ export const GAME_SETTINGS = {
     stepVolume: 1,
     stingerKey: "stinger",
     stingerVolume: 0.7,
-    stingerCooldownMs: 1500,
+    stingerCooldownMs: 3500,
     spawnKey: "spawn",
     spawnVolume: 1,
     bleepKey: "bleep",
