@@ -2,6 +2,19 @@
 
 The Quiet Below is a browser-based maze puzzle game built with TypeScript, Phaser, and Vite. Find your way through the dark, collect keys, unlock doors, and avoid enemies that hunt the player.
 
+<p>
+    <img
+        src="docs/images/thumbnail-1.gif"
+        alt="Player traversing through maze"
+        width="300"
+    />
+    <img
+        src="docs/images/thumbnail-2.gif"
+        alt="Player being spotted by an enemy and collecting a key"
+        width="300"
+    />
+</p>
+
 ## Getting started
 
 You need [Bun](https://bun.sh/) or Node.js with npm installed, any would do.
@@ -62,3 +75,7 @@ An in-browser level editor is also available at [`maze-level-editor.html`](./maz
 | `bun run test` / `npm run test`         | Run unit tests with Vitest               |
 
 Production files are generated in `dist/`.
+
+## LICENSE
+
+MIT - License
